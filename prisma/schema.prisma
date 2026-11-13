@@ -1,0 +1,213 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  MEMBER
+}
+
+enum ProspectStatus {
+  DISCOVERED
+  TO_REVIEW
+  QUALIFIED
+  CONTACT_PENDING
+  CONTACTED
+  REPLIED
+  MEETING
+  PROPOSAL
+  WON
+  LOST
+}
+
+enum ProspectSource {
+  OSM
+  MANUAL
+  IMPORT
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum ActivityType {
+  NOTE
+  CALL
+  EMAIL
+  MEETING
+  STATUS_CHANGE
+  ASSIGNMENT
+  OTHER
+}
+
+enum OpportunityStage {
+  IDENTIFIED
+  QUALIFIED
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+model User {
+  id        String   @id @db.Uuid
+  fullName  String
+  email     String   @unique
+  role      UserRole @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignedProspects Prospect[] @relation("ProspectAssignee")
+  createdCampaigns  Campaign[] @relation("CampaignCreator")
+  activities        Activity[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model OsmPlace {
+  id         String                   @id @default(cuid())
+  osmType    String
+  osmId      BigInt
+  name       String?
+  category   String?
+  /// PostGIS geography(Point, 4326) — created in SQL migration; not a Prisma-native type
+  location   Unsupported("geography(Point,4326)")?
+  latitude   Float
+  longitude  Float
+  tags       Json                     @default("{}")
+  importedAt DateTime                 @default(now())
+  updatedAt  DateTime                 @updatedAt
+
+  prospect Prospect?
+
+  @@unique([osmType, osmId])
+  @@index([category])
+  @@index([latitude, longitude])
+  @@map("osm_places")
+}
+
+model Prospect {
+  id           String         @id @default(cuid())
+  businessName String
+  category     String?
+  address      String?
+  phone        String?
+  email        String?
+  website      String?
+  instagram    String?
+  facebook     String?
+  status       ProspectStatus @default(DISCOVERED)
+  source       ProspectSource @default(OSM)
+  osmPlaceId   String?        @unique
+  assignedToId String?        @db.Uuid
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  osmPlace    OsmPlace?          @relation(fields: [osmPlaceId], references: [id], onDelete: SetNull)
+  assignedTo  User?              @relation("ProspectAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  campaigns   CampaignProspect[]
+  analyses    Analysis[]
+  activities  Activity[]
+  opportunities Opportunity[]
+
+  @@index([status])
+  @@index([category])
+  @@index([assignedToId])
+  @@index([businessName])
+  @@map("prospects")
+}
+
+model Campaign {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  status      CampaignStatus @default(DRAFT)
+  createdById String         @db.Uuid
+  zoneLabel   String?
+  categories  String[]       @default([])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  createdBy User               @relation("CampaignCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  prospects CampaignProspect[]
+
+  @@index([status])
+  @@index([createdById])
+  @@map("campaigns")
+}
+
+model CampaignProspect {
+  campaignId String
+  prospectId String
+  addedAt    DateTime @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  prospect Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, prospectId])
+  @@index([prospectId])
+  @@map("campaign_prospects")
+}
+
+model Analysis {
+  id          String   @id @default(cuid())
+  prospectId  String
+  finding     String
+  opportunity String?
+  confidence  Float?
+  source      String?
+  createdAt   DateTime @default(now())
+
+  prospect Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  @@index([prospectId])
+  @@map("analyses")
+}
+
+model Activity {
+  id           String       @id @default(cuid())
+  prospectId   String
+  userId       String       @db.Uuid
+  activityType ActivityType @default(NOTE)
+  description  String
+  createdAt    DateTime     @default(now())
+
+  prospect Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([prospectId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("activities")
+}
+
+model Opportunity {
+  id             String           @id @default(cuid())
+  prospectId     String
+  service        String
+  stage          OpportunityStage @default(IDENTIFIED)
+  estimatedValue Decimal?         @db.Decimal(12, 2)
+  notes          String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  prospect Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  @@index([prospectId])
+  @@index([stage])
+  @@map("opportunities")
+}

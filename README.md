@@ -1,36 +1,96 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DGM Prospect
 
-## Getting Started
+Plataforma interna de DGM CLOUD para prospección comercial y descubrimiento geográfico de negocios.
 
-First, run the development server:
+Arquitectura: **Next.js Full Stack Modular Monolith** (App Router + Route Handlers + Prisma/PostGIS + Supabase Auth).
+
+## Requisitos
+
+- Node.js >= 20
+- pnpm 9+
+- Docker Desktop (PostgreSQL + PostGIS local)
+- Proyecto Supabase (Auth) — opcional para arrancar UI; obligatorio para login real
+
+## Instalación
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+cp .env.example .env
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Completa en `.env`:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Uso |
+|----------|-----|
+| `DATABASE_URL` | Postgres local (valor de ejemplo en `.env.example`) |
+| `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon key (pública) |
+| `SUPABASE_JWT_SECRET` | JWT secret (solo servidor) |
+| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+No inventes credenciales: créalas en el dashboard de Supabase.
 
-## Learn More
+## Base de datos (Docker)
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+docker compose up -d db
+pnpm db:migrate:deploy
+pnpm db:seed
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Desarrollo
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+pnpm dev
+```
 
-## Deploy on Vercel
+- App: http://localhost:3000
+- Health: http://localhost:3000/api/v1/health
+- Login: http://localhost:3000/login
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Scripts
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Script | Descripción |
+|--------|-------------|
+| `pnpm dev` | Next.js (Turbopack) |
+| `pnpm build` / `pnpm start` | Producción local |
+| `pnpm lint` | ESLint |
+| `pnpm typecheck` | TypeScript estricto |
+| `pnpm test` | Vitest |
+| `pnpm db:migrate` | Migraciones (dev) |
+| `pnpm db:migrate:deploy` | Migraciones (deploy/CI) |
+| `pnpm db:seed` | Verifica PostGIS / seed documentado |
+| `pnpm db:studio` | Prisma Studio |
+
+## Estructura
+
+```
+src/
+  app/                 # Rutas UI + /api/v1
+  modules/             # Dominio (services + repositories)
+  infrastructure/      # Prisma, OSM port, queue port, workers
+  shared/              # UI, schemas Zod, tipos, config categorías
+  lib/                 # env, supabase clients
+prisma/                # schema + migraciones SQL (PostGIS)
+docs/                  # Arquitectura, API, seguridad, roadmap
+```
+
+## Documentación
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Database](docs/DATABASE.md)
+- [API](docs/API.md)
+- [OSM Integration](docs/OSM-INTEGRATION.md)
+- [Security](docs/SECURITY.md)
+- [Roadmap](docs/ROADMAP.md)
+
+## Despliegue
+
+Una sola app Next.js (Netlify, Vercel o VPS) + PostgreSQL/PostGIS + Supabase Auth. Workers asíncronos (BullMQ/Redis) son opcionales y posteriores.
+
+## Fases
+
+1. **FASE 0** — Fundamentos (actual)
+2. **FASE 1** — Business Explorer + Overpass
+3. **FASE 2** — Prospectos y campañas
+4. **FASE 3** — Inteligencia comercial y exportaciones
